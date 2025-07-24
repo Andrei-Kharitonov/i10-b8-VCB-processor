@@ -135,7 +135,7 @@ def jump_r(r_2bit: int, overflow=False, negative=False, zero=False):
   inst += (r_2bit << 2)
   if not overflow and not negative and not zero:
     inst += 0b00000000
-  if overflow and not negative and not zero:
+  elif overflow and not negative and not zero:
     inst += 0b00000001
   elif negative and not overflow and not zero:
     inst += 0b00000010
