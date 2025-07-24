@@ -36,7 +36,9 @@
 
 # First 4 bytes must be empty
 binary_data = [0b00000000, 0b00000000, 0b00000000, 0b00000000]
-program_size = 1
+aliases = {}
+not_declarated_aliases = []
+program_current_size = 1
 
 # Registers
 reg0 = 0b00000000
@@ -47,11 +49,14 @@ reg3 = 0b00000011
 # Compiler functions
 def byte_add(byte):
   global binary_data
-  global program_size
-  if not (0 <= byte <= 255):
-    raise ValueError('byte_add argument must be from 0 to 255 included')
+  global program_current_size
+
   binary_data += [0b00000000, 0b00000000, 0b00000000, byte]
-  program_size += 1
+  program_current_size += 1
+
+def alias_add(alias: str, address: int):
+  if alias != None and (len(alias.strip()) > 0):
+    aliases[alias] = address - 2
 
 def register_validation(r_2bit, func_name):
   if not (0 <= r_2bit <= 3):
@@ -62,38 +67,66 @@ def compile_vmem(file_name: str):
   Compiling program and write to the .vcbmem file
   '''
   global binary_data
-  global program_size
-  print(f'Program size = {program_size} bytes.')
-  if (program_size <= 256):
+  global program_current_size
+  print(f'Program size = {program_current_size} bytes.')
+  if (program_current_size <= 256):
+    aliases_restore()
     with open(f'{file_name}.vcbmem', "wb") as file:
       file.write(bytearray(binary_data))
     print('Compilation completed!')
   else:
     raise Exception('Compilation failed! The program is bigger than 256 byte.')
   
-def get_program_size():
+def get_program_current_size():
   '''
   Return current size of program in bytes
   '''
-  global program_size
-  return program_size
+  return program_current_size
 
 def get_binary_data():
   '''
   Return list of current instructions in binary
   '''
-  global binary_data
   return binary_data
 
+def get_alias(alias: str):
+  '''
+  Return value of alias
+  '''
+  try:
+    return aliases[alias]
+  except:
+    not_declarated_aliases.append([alias, program_current_size])
+    return 0
+
+# Restore aliases that were called before declaration
+def aliases_restore():
+  for i in not_declarated_aliases:
+    if i[0] in aliases:
+      alias_value = aliases[i[0]]
+      binary_instruction = binary_data[4 + i[1] * 4 - 1] >> 4
+      if binary_instruction in [0b0110, 0b0111, 0b1000]:
+        binary_data[4 + i[1] * 4 + 4 - 1] = alias_value
+      elif binary_instruction in [0b0011]:
+        if (0 > alias_value > 15):
+          raise ValueError('aliases_restore: jump_c argument must be from 0 to 15 included')
+        binary_data[4 + i[1] * 4 - 1] += alias_value
+  
+def get_all_aliases():
+  return [aliases, not_declarated_aliases]
+
+
 # Instructions
-def idle():
+def idle(alias=''):
   '''
   Do nothing, but needs for propper processor work
   '''
   inst = 0b00000000
   byte_add(inst)
+  alias_add(alias, program_current_size)
 
-def addr(r1_2bit: int, r2_2bit: int):
+
+def addr(r1_2bit=0, r2_2bit=0, alias=''):
   '''
   Take 2 register addresses as arguments, then write sum of their values in r1_2bit
   '''
@@ -102,8 +135,10 @@ def addr(r1_2bit: int, r2_2bit: int):
   register_validation(r2_2bit, 'addr')
   inst += (r1_2bit << 2) + r2_2bit
   byte_add(inst)
+  alias_add(alias, program_current_size)
 
-def subr(r1_2bit: int, r2_2bit: int):
+
+def subr(r1_2bit=0, r2_2bit=0, alias=''):
   '''
   Take 2 register addresses as arguments, then subtract vaulue of r2_2bit from value of r1_2bit and write result in r1_2bit
   '''
@@ -112,8 +147,10 @@ def subr(r1_2bit: int, r2_2bit: int):
   register_validation(r2_2bit, 'subr')
   inst += (r1_2bit << 2) + r2_2bit
   byte_add(inst)
+  alias_add(alias, program_current_size)
 
-def jump_c(address_4bit: int):
+
+def jump_c(address_4bit: int, alias=''):
   '''
   Set current memory address to a address_4bit + 1 in argument
   '''
@@ -122,8 +159,10 @@ def jump_c(address_4bit: int):
     raise ValueError('jump_c address argument must be from 0 to 15 included')
   inst += address_4bit
   byte_add(inst)
+  alias_add(alias, program_current_size)
 
-def jump_r(r_2bit: int, overflow=False, negative=False, zero=False):
+
+def jump_r(r_2bit=0, overflow=False, negative=False, zero=False, alias=''):
   '''
   Set current memory address to a vaule of r_2bit + 1. Contain facultative condition flags:
   overflow - make jump_r only if result of last math operation cause overflow;
@@ -144,8 +183,10 @@ def jump_r(r_2bit: int, overflow=False, negative=False, zero=False):
   else:
     raise ValueError('jump_r can take only 1 flag')
   byte_add(inst)
+  alias_add(alias, program_current_size)
 
-def setr_c(r_2bit: int, num_4bit: int):
+
+def setr_c(r_2bit=0, num_4bit=0, alias=''):
   '''
   Set 2 bit number in register (mostly used to set value of reg to 0 or 1)
   '''
@@ -155,44 +196,52 @@ def setr_c(r_2bit: int, num_4bit: int):
   register_validation(r_2bit, 'setr_c')
   inst += (r_2bit << 2) + num_4bit
   byte_add(inst)
+  alias_add(alias, program_current_size)
 
-def load_c(r_2bit: int, num_8bit: int):
+
+def load_c(r_2bit=0, num_8bit=0, alias=''):
   '''
   Load number in register
   '''
   inst = 0b01100000
-  if not (0 <= num_8bit <= 255):
+  if num_8bit != None and not (0 <= num_8bit <= 255):
     raise ValueError('load_c number argument must be from 0 to 255 included')
   register_validation(r_2bit, 'load_c')
   inst += (r_2bit << 2)
   byte_add(inst)
+  alias_add(alias, program_current_size)
   byte_add(num_8bit)
 
-def load_m(r_2bit: int, address_8bit: int):
+
+def load_m(r_2bit=0, address_8bit=0, alias=''):
   '''
   Load number from memory cell location at address_8bit
   '''
   inst = 0b01110000
-  if not (0 <= address_8bit <= 255):
+  if address_8bit != None and not (0 <= address_8bit <= 255):
     raise ValueError('load_m address argument must be from 0 to 255 included')
   register_validation(r_2bit, 'load_m')
   inst += (r_2bit << 2)
   byte_add(inst)
+  alias_add(alias, program_current_size)
   byte_add(address_8bit)
 
-def save_m(r_2bit: int, address_8bit: int):
+
+def save_m(r_2bit=0, address_8bit=0, alias=''):
   '''
   Save value of register to memory cell location at address_8bit
   '''
   inst = 0b10000000
-  if not (0 <= address_8bit <= 255):
+  if address_8bit != None and not (0 <= address_8bit <= 255):
     raise ValueError('save_m address argument must be from 0 to 255 included')
   register_validation(r_2bit, 'save_m')
   inst += (r_2bit << 2)
   byte_add(inst)
+  alias_add(alias, program_current_size)
   byte_add(address_8bit)
 
-def incr(r_2bit: int, negative=False):
+
+def incr(r_2bit=0, negative=False, alias=''):
   '''
   Increment value of register. If contain flag negative - decrement.
   '''
@@ -202,8 +251,10 @@ def incr(r_2bit: int, negative=False):
   if negative:
     inst += 0b00000010
   byte_add(inst)
+  alias_add(alias, program_current_size)
 
-def halt(r_2bit: int, input_flag=False):
+
+def halt(r_2bit=0, input_flag=False, alias=''):
   '''
   Stops program execution and display value of register untill "continue" button press.
   If has input_flag - doesn't display value. Instead of this it write value from input when "continue" button pressed into register.
@@ -214,9 +265,11 @@ def halt(r_2bit: int, input_flag=False):
   if input_flag:
     inst += 0b00000010
   byte_add(inst)
+  alias_add(alias, program_current_size)
+
 
 __all__ = [
   'reg0', 'reg1', 'reg2', 'reg3',
   'idle', 'addr', 'subr', 'jump_c', 'jump_r', 'setr_c', 'load_c', 'load_m', 'save_m', 'incr', 'halt',
-  'compile_vmem', 'get_program_size', 'get_binary_data'
+  'compile_vmem', 'get_program_current_size', 'get_binary_data', 'get_alias', 'get_all_aliases'
 ]

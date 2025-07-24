@@ -106,3 +106,6 @@ halt(reg0) # display 25
 ```
 Write ```compile_vmem('i10-b8')``` at the end of program and run this file to compile binary file .vcbmem.
 To enable external .vcbmem files in VCB project open Vmem editor in the game and click on the arrows at left bottom corner.
+
+### Aliases
+Some instructions require memory address of another instruction. But this address can often change. To simplify process of working with memory there is aliases. Alias is just variable that contain memory address of instruction where it was declared. Value of existing alias can be getted with function ```get_alias('alias_name')```. Aliases can be declarate in any place of program before function ```compile_vmem()```.
