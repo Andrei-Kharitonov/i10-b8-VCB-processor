@@ -94,4 +94,15 @@ Fetch and Execute **load_m** and **save_m**:
 9. write/read disable register
 10. disable read AR
 
-*compiler in development*
+## Compiler
+To use compiler create .py file and importing all from i10b8compiler.py
+``` py
+from i10b8compiler import *
+```
+Use imported functions to write programs. For example:
+``` py
+load_c(reg0, 25) # load 25 in register 0
+halt(reg0) # display 25
+```
+Write ```compile_vmem('i10-b8')``` at the end of program and run this file to compile binary file .vcbmem.
+To enable external .vcbmem files in VCB project open Vmem editor in the game and click on the arrows at left bottom corner.
